@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>دونده حرفه‌ای – Smash + 5 جان (Fullscreen)</title>
+  <style>
+    :root{
+      --bg1:#0b0f1a; --bg2:#1a1740; --fg:#eaf2ff;
+      --a:#6be1ff; --b:#ffb86b; --c:#a5ff6b; --danger:#ff6b6b; --coin:#ffe180;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+    }
+    html,body{
+      margin:0; height:100%;
+      background:radial-gradient(1000px 700px at 70% -10%, var(--bg2), var(--bg1));
+      color:var(--fg);
+      font-family: ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      overflow:hidden;
+    }
+    .wrap{
+      min-height:100svh;
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      gap:12px;
+      padding:clamp(10px,3vw,24px);
+      padding-top: calc(clamp(10px,3vw,24px) + var(--safe-top));
+      padding-right: calc(clamp(10px,3vw,24px) + var(--safe-right));
+      padding-bottom: calc(clamp(10px,3vw,24px) + var(--safe-bottom));
+      padding-left: calc(clamp(10px,3vw,24px) + var(--safe-left));
+      box-sizing:border-box;
+    }
+    /* هدر خطی + چسبان + اسکرول‌پذیر افقی */
+    header{
+      position:sticky; top:0; z-index:10;
+      display:flex; align-items:center; justify-content:flex-start; /* ⟵ چسباندن به چپ/راست */
+      gap:0; /* ⟵ بدون فاصله بین پنل‌ها */
+      background:rgba(0,0,0,.25); backdrop-filter:blur(6px);
+      padding:8px 10px; border-radius:14px; border:1px solid rgba(255,255,255,.08);
+      overflow:auto; white-space:nowrap;
+    }
+    header::-webkit-scrollbar{display:none}
+
+    .panel{
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:16px;
+      padding:8px 12px;
+      display:flex; gap:14px; align-items:center;
+      flex-wrap:nowrap;
+    }
+    /* ⟵ حذف گردیِ وسط و خط مرزی بین دو پنل */
+    header .panel:first-child{
+      border-top-right-radius:0;
+      border-bottom-right-radius:0;
+    }
+    header .panel + .panel{
+      margin-inline-start:-1px;    /* مرزها روی هم بیفتند */
+      border-left:none;            /* خط مرزی وسط دیده نشود */
+      border-top-left-radius:0;
+      border-bottom-left-radius:0;
+    }
+
+    .btn{
+      padding:8px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.12);
+      background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02));
+      color:var(--fg); cursor:pointer
+    }
+    .btn:hover{filter:brightness(1.1)}
+    .accent{border-color:rgba(107,225,255,.5);box-shadow:0 0 0 2px rgba(107,225,255,.15) inset}
+    .value{font-variant-numeric:tabular-nums;font-weight:800}
+    footer{text-align:center;opacity:.85;font-size:12px}
+    .kbd{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      background:rgba(255,255,255,.08);padding:2px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.2)
+    }
+    label.toggle{display:flex;align-items:center;gap:6px;cursor:pointer}
+    input[type="checkbox"]{transform:scale(1.2)}
+    canvas{
+      display:block; margin:0 auto;
+      border-radius:18px; border:1px solid rgba(255,255,255,.06);
+      box-shadow:0 10px 40px rgba(0,0,0,.5);
+      background:#0b1220;
+      touch-action:manipulation;
+      max-width:100%;
+      height:auto;
+    }
+    @media (max-width: 360px){
+      header .panel{gap:8px}
+      .btn{padding:6px 10px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="wrap">
+    <header id="toolbar">
+      <div class="panel">
+        <strong>🏃‍♂️ دونده حرفه‌ای</strong>
+        <span>|</span>
+        <span>امتیاز: <span id="score" class="value">0</span></span>
+        <span>سکه: <span id="coins" class="value">0</span></span>
+        <span>بیشترین: <span id="best" class="value">0</span></span>
+        <span>|</span>
+        <span id="livesHud" title="جون‌ها">❤️×5</span>
+        <span id="status" style="opacity:.9"></span>
+      </div>
+      <div class="panel">
+        <button class="btn" id="pauseBtn">⏯ مکث</button>
+        <button class="btn accent" id="restartBtn">🔁 شروع دوباره</button>
+        <button class="btn" id="fullscreenBtn" title="تمام‌صفحه">⛶ تمام‌صفحه</button>
+        <label class="toggle"><input type="checkbox" id="musicToggle" checked/> ♫ موزیک</label>
+        <label class="toggle"><input type="checkbox" id="sfxToggle" checked/> 🔊 افکت</label>
+      </div>
+    </header>
+
+    <canvas id="cv" aria-label="Pro Runner Game" role="img"></canvas>
+
+    <footer>
+      کنترل‌ها: <span class="kbd">Space/↑</span> پرش (دو‌پرش) • <span class="kbd">↓</span> اسلاید • <span class="kbd">Shift</span> دش • موبایل: ضربه/نگه‌داشتن • <span class="kbd">F</span> تمام‌صفحه
+    </footer>
+  </div>
+
+<script>
+/* ======================= Responsive Canvas ======================= */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d', { alpha: true, desynchronized: true });
+const BASE_W = 960, BASE_H = 540; // 16:9
+let DPR = 1;
+
+function computeCanvasCssSize(){
+  const wrap = document.querySelector('.wrap');
+  const header = document.getElementById('toolbar');
+  const footer = document.querySelector('footer');
+
+  const vh = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+  const vw = (window.visualViewport && window.visualViewport.width)  ? window.visualViewport.width  : window.innerWidth;
+
+  const wrapStyles = getComputedStyle(wrap);
+  const padY = parseFloat(wrapStyles.paddingTop) + parseFloat(wrapStyles.paddingBottom);
+  const padX = parseFloat(wrapStyles.paddingLeft) + parseFloat(wrapStyles.paddingRight);
+
+  const headerH = header.getBoundingClientRect().height || 0;
+  const footerH = footer.getBoundingClientRect().height || 0;
+
+  const availW = Math.max(0, vw - padX);
+  const availH = Math.max(0, vh - padY - headerH - footerH);
+
+  const idealW = availW;
+  const idealH = Math.min(availH, idealW * (BASE_H / BASE_W));
+  const finalW = Math.min(idealW, idealH * (BASE_W / BASE_H));
+  const finalH = finalW * (BASE_H / BASE_W);
+
+  const cssW = Math.max(280, Math.floor(finalW));
+  const cssH = Math.max(158, Math.floor(finalH));
+  return { cssW, cssH };
+}
+
+function resizeCanvas(){
+  DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const { cssW, cssH } = computeCanvasCssSize();
+  cv.style.width = cssW + 'px';
+  cv.style.height = cssH + 'px';
+  const internalW = Math.max(2, Math.round(cssW * DPR));
+  const internalH = Math.max(2, Math.round(cssH * DPR));
+  if (cv.width !== internalW) cv.width = internalW;
+  if (cv.height !== internalH) cv.height = internalH;
+  ctx.setTransform(cv.width / BASE_W, 0, 0, cv.height / BASE_H, 0, 0);
+}
+addEventListener('resize', resizeCanvas, { passive: true });
+addEventListener('orientationchange', () => setTimeout(resizeCanvas, 50), { passive: true });
+window.visualViewport?.addEventListener('resize', resizeCanvas, { passive: true });
+resizeCanvas();
+
+/* ======================= Fullscreen Toggle ======================= */
+const wrapEl = document.getElementById('wrap');
+const fsBtn = document.getElementById('fullscreenBtn');
+const toolbar = document.getElementById('toolbar');
+
+function isFullscreen(){
+  return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+}
+async function enterFullscreen(el){
+  try{
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+    if (screen.orientation && screen.orientation.lock) { try { await screen.orientation.lock('landscape'); } catch{} }
+  }catch{
+    window.scrollTo(0,1);
+  } finally {
+    setTimeout(resizeCanvas, 60);
+  }
+}
+async function exitFullscreen(){
+  try{
+    if (document.exitFullscreen) await document.exitFullscreen();
+    else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+    else if (document.msExitFullscreen) await document.msExitFullscreen();
+  } finally {
+    setTimeout(resizeCanvas, 60);
+  }
+}
+function updateFsBtn(){
+  fsBtn.textContent = isFullscreen() ? '⛶ خروج' : '⛶ تمام‌صفحه';
+}
+fsBtn.addEventListener('click', async ()=>{
+  if (isFullscreen()) await exitFullscreen(); else await enterFullscreen(wrapEl);
+  updateFsBtn();
+});
+document.addEventListener('fullscreenchange', ()=>{ updateFsBtn(); resizeCanvas(); });
+document.addEventListener('webkitfullscreenchange', ()=>{ updateFsBtn(); resizeCanvas(); });
+document.addEventListener('msfullscreenchange', ()=>{ updateFsBtn(); resizeCanvas(); });
+
+// اولین تعامل = تلاش برای تمام‌صفحه
+let firstInteract=false;
+function tryFSOnce(){ if(firstInteract) return; firstInteract=true; enterFullscreen(wrapEl).finally(updateFsBtn); }
+document.addEventListener('pointerdown', tryFSOnce, {once:true, passive:true});
+document.addEventListener('keydown', tryFSOnce, {once:true});
+
+/* ======================= Game Core (بدون تغییر منطقی) ======================= */
+const HUD = {score:0, coins:0, best:+(localStorage.getItem('pro_runner_best')||0)};
+document.getElementById('best').textContent = HUD.best;
+const livesHud = document.getElementById('livesHud');
+
+const G = 2200, GROUND = 440;
+const rng = (a,b)=>a+Math.random()*(b-a);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+const state = {running:true, over:false, t:0, speed: 260, cameraShake:0, hue:210, smashT:0};
+let maxLives = 5;
+
+// ===== Audio =====
+let audio=null;
+function initAudio(){
+  if(audio) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ctxA = new AC();
+  const master = ctxA.createGain(); master.gain.value = 0.5; master.connect(ctxA.destination);
+  const sfxGain = ctxA.createGain(); sfxGain.gain.value = 0.8; sfxGain.connect(master);
+  const musicGain = ctxA.createGain(); musicGain.gain.value = 0.35; musicGain.connect(master);
+
+  function beep(freq=440, dur=0.12, type='sine', gain=0.5){
+    const t0 = ctxA.currentTime + 0.001;
+    const osc = ctxA.createOscillator();
+    const g = ctxA.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain, t0+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    osc.connect(g).connect(sfxGain); osc.start(t0); osc.stop(t0+dur);
+  }
+  function noise(dur=0.15, gain=0.35){
+    const t0 = ctxA.currentTime + 0.001;
+    const buffer = ctxA.createBuffer(1, ctxA.sampleRate*dur, ctxA.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * Math.pow(1-i/data.length, 2);
+    const src = ctxA.createBufferSource(); src.buffer = buffer;
+    const g = ctxA.createGain(); g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    src.connect(g).connect(sfxGain); src.start(t0);
+  }
+
+  // background arpeggio
+  let musicOn = true;
+  let seqIdx = 0;
+  const scale = [0, 3, 5, 7, 10, 12], base = 220;
+  function musicTick(){
+    if(!musicOn) return;
+    const t0 = ctxA.currentTime + 0.001;
+    const osc = ctxA.createOscillator();
+    const g = ctxA.createGain();
+    const n = scale[seqIdx % scale.length], n2 = scale[(seqIdx+2) % scale.length];
+    const f1 = base * Math.pow(2, n/12), f2 = base * Math.pow(2, n2/12);
+    osc.type='triangle';
+    osc.frequency.setValueAtTime(f1, t0);
+    osc.frequency.linearRampToValueAtTime(f2, t0+0.22);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(0.25, t0+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+0.28);
+    osc.connect(g).connect(musicGain); osc.start(t0); osc.stop(t0+0.3);
+    seqIdx++;
+  }
+  setInterval(musicTick, 300);
+
+  audio = {
+    ctx: ctxA, master, sfxGain, musicGain,
+    setMusic(on){ musicOn = on; },
+    setSfx(on){ sfxGain.gain.value = on?0.8:0.0; },
+    sfx:{
+      jump(){ beep(620,.12,'sine',.45); },
+      double(){ beep(840,.1,'square',.4); },
+      coin(){ beep(900,.08,'triangle',.5); beep(1200,.06,'triangle',.35); },
+      hit(){ noise(.18,.45); beep(160,.2,'sawtooth',.4); },
+      dash(){ beep(400,.08,'square',.35); noise(.08,.25); },
+      land(){ beep(300,.06,'sine',.25); },
+      heart(){ beep(880,.08,'sine',.45); },
+      power(){ beep(500,.08,'square',.5); beep(750,.12,'square',.5); }
+    }
+  };
+}
+
+// ===== Player & Input =====
+const player = {
+  x: 160, y: GROUND, w: 44, h: 64, vy: 0,
+  onGround: true, canDouble:true, slideT:0,
+  dashT:0, dashCD:0, inv:0, trail:[], lives:5
+};
+function updateLivesHud(){ livesHud.textContent = `❤️×${player.lives}`; }
+updateLivesHud();
+
+// جلوگیری از اسکرول با کلیدها
+function preventScrollKeys(e){
+  const codes = ['Space','ArrowUp','ArrowDown','ShiftLeft','ShiftRight','KeyP','KeyF'];
+  if (codes.includes(e.code)) e.preventDefault();
+}
+addEventListener('keydown', preventScrollKeys, { passive:false });
+
+// کلیدها
+addEventListener('keydown', e=>{
+  if(e.code==='Space'||e.code==='ArrowUp') { initAudio(); jump(); }
+  if(e.code==='ArrowDown') slide(true);
+  if(e.code==='ShiftLeft'||e.code==='ShiftRight') { initAudio(); dash(); }
+  if(e.code==='KeyP') togglePause();
+  if(e.code==='KeyF') { isFullscreen()? exitFullscreen(): enterFullscreen(wrapEl); updateFsBtn(); }
+}, { passive:false });
+addEventListener('keyup', e=>{ if(e.code==='ArrowDown') slide(false); }, { passive:true });
+
+// === کلیک/تاچ هرجا به‌جز هدر → پرش
+document.addEventListener('pointerdown', (e)=>{
+  if (toolbar.contains(e.target)) return; // روی دکمه‌ها کاری نکن
+  initAudio();
+  tapCount++; if(tapCount===1) jump(); else if(tapCount===2) jump();
+  slide(true);
+}, {passive:true});
+document.addEventListener('pointerup', (e)=>{
+  if (toolbar.contains(e.target)) return;
+  slide(false);
+}, {passive:true});
+let tapCount=0; setInterval(()=>tapCount=0, 280);
+
+// Music/SFX toggles
+document.getElementById('musicToggle').addEventListener('change', (e)=>{ initAudio(); audio.setMusic(e.target.checked); });
+document.getElementById('sfxToggle').addEventListener('change', (e)=>{ initAudio(); audio.setSfx(e.target.checked); });
+
+// Buttons
+document.getElementById('pauseBtn').onclick = togglePause;
+document.getElementById('restartBtn').onclick = ()=> restart();
+
+function jump(){
+  if(state.over){ restart(); return; }
+  if(!state.running){ state.running = true; return; }
+  if(player.onGround){
+    player.vy = -900; player.onGround=false; player.canDouble=true;
+    if(audio) audio.sfx.jump(); spawnJumpFx('#6be1ff');
+  } else if(player.canDouble){
+    player.vy = -820; player.canDouble=false;
+    if(audio) audio.sfx.double(); spawnJumpFx('#ffb86b');
+  }
+}
+function slide(down){ player.slideT = down? 0.35 : 0; }
+function dash(){ if(player.dashCD>0||state.over) return; player.dashT = 0.18; player.dashCD = 1.0; state.cameraShake = 8; if(audio) audio.sfx.dash(); }
+function togglePause(){ if(state.over) return; state.running = !state.running; document.getElementById('status').textContent = state.running?'':'مکث ⏸'; }
+
+/* ======================= World ======================= */
+const obs = []; const coins = []; const parts = []; const hearts = []; const powerups = [];
+let spawnTimer = 0, coinTimer = 0, platTimer=0, heartTimer=0, powerTimer=0;
+
+function spawnSpikeRow(){ const n = Math.floor(rng(1,3.9)), base = BASE_W + 40; for(let i=0;i<n;i++) obs.push({x: base + i*48, y: GROUND-36, w:36, h:36, type:'spike'}); }
+function spawnWall(){ const h = rng(60, 120); obs.push({x: BASE_W+40, y: GROUND-h, w: 40, h, type:'box'}); }
+function spawnPlatform(){ const y=rng(260,360), w=rng(120,220), m=Math.random()<0.6; obs.push({x: BASE_W+60, y, w, h: 16, type:'plat', move:m, ay: m? rng(-40,40):0}); }
+function spawnCoinArc(){ const cx=BASE_W + 60, cy=rng(260,360), r=rng(50,110), n=8; for(let i=0;i<n;i++){ const a=i/(n-1)*Math.PI; coins.push({x: cx + Math.cos(a)*r, y: cy - Math.sin(a)*r, r:8, got:false, hue: rng(40,65)}); } }
+function spawnHeart(){ hearts.push({x: BASE_W+50, y: rng(260, 380), r:10, got:false}); }
+function spawnSmashPower(){ powerups.push({x: BASE_W+60, y: rng(260, 360), r:12, type:'smash', got:false}); }
+function spawnJumpFx(color){ for(let i=0;i<10;i++){ parts.push({x: player.x+player.w/2, y: player.y-player.h, vx: rng(-140,140), vy: rng(-260,-140), life: rng(0.25,0.45), color}); } }
+
+/* ======================= Loop ======================= */
+let last=performance.now();
+requestAnimationFrame(loop);
+function loop(now){
+  const dt = Math.min(1/30, (now-last)/1000); last=now;
+  if(state.running && !state.over) update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function update(dt){
+  state.t += dt;
+  HUD.score += dt*12;
+  const targetSpeed = 260 + Math.min(380, HUD.score*0.8) + (state.smashT>0 ? 90 : 0);
+  state.speed = lerp(state.speed, targetSpeed, 0.02);
+  state.hue = (state.hue + dt*6) % 360;
+
+  // Spawners
+  spawnTimer -= dt; if(spawnTimer<=0){ (Math.random()<0.5? spawnSpikeRow: spawnWall)(); spawnTimer = rng(0.7, 1.2) * (player.slideT>0? 0.85:1); }
+  platTimer -= dt; if(platTimer<=0){ spawnPlatform(); platTimer = rng(1.2, 2.0); }
+  coinTimer -= dt; if(coinTimer<=0){ spawnCoinArc(); coinTimer = rng(2.4, 3.4); }
+  heartTimer -= dt; if(heartTimer<=0){ spawnHeart(); heartTimer = rng(7, 11); }
+  powerTimer -= dt; if(powerTimer<=0){ spawnSmashPower(); powerTimer = rng(12, 18); }
+
+  const prevFeet = player.y;
+  const dashV = player.dashT>0? 520:0;
+  player.dashT = Math.max(0, player.dashT - dt);
+  player.dashCD = Math.max(0, player.dashCD - dt);
+  player.inv = Math.max(0, player.inv - dt);
+  state.smashT = Math.max(0, state.smashT - dt);
+
+  const slideFactor = player.slideT>0 ? 0.55 : 1;
+  if(player.slideT>0){ player.slideT = Math.max(0, player.slideT - dt); }
+
+  player.vy += 2200*dt*slideFactor;
+  player.y += player.vy*dt;
+
+  player.trail.push({x: player.x+player.w*0.5, y: player.y - (player.slideT>0? player.h*0.3: player.h*0.7), a: 1});
+  if(player.trail.length>24) player.trail.shift();
+
+  const vx = (state.speed + dashV) * dt;
+  for(const o of obs){
+    o.x -= vx;
+    if(o.type==='plat' && o.move){ o.y += Math.sin(state.t*2 + o.x*0.02) * 20 * dt; }
+  }
+  for(const c of coins){ c.x -= vx; }
+  for(const h of hearts){ h.x -= vx; }
+  for(const p of powerups){ p.x -= vx; }
+  for(const prt of parts){ prt.x -= vx*0.3; prt.vy += 2200*0.8*dt; prt.x += prt.vx*dt; prt.y += prt.vy*dt; prt.life -= dt; }
+
+  while(obs.length && obs[0].x + obs[0].w < -80) obs.shift();
+  while(coins.length && coins[0].x < -80) coins.shift();
+  while(hearts.length && hearts[0].x < -80) hearts.shift();
+  while(powerups.length && powerups[0].x < -80) powerups.shift();
+  for(let i=parts.length-1;i>=0;i--) if(parts[i].life<=0) parts.splice(i,1);
+
+  let grounded = false;
+  if(player.y >= 440){ if(!player.onGround && audio) audio.sfx.land(); player.y = 440; player.vy = 0; grounded = true; }
+
+  const ph = player.slideT>0? player.h*0.55 : player.h;
+  for(const o of obs){
+    if(o.type!=='plat') continue;
+    const feet = player.y, head = player.y - ph;
+    const wasAbove = (prevFeet - ph) <= o.y - 1;
+    const overlapX = (player.x + player.w) > o.x && player.x < (o.x + o.w);
+    const crossingTop = (prevFeet <= o.y) && (feet >= o.y);
+    const withinY = head < o.y و feet >= o.y;
+    if(player.vy >= 0 && wasAbove && overlapX && (crossingTop || withinY)){
+      player.y = o.y; player.vy = 0; grounded = true;
+    }
+  }
+  player.onGround = grounded;
+  if(grounded) player.canDouble = true;
+
+  const px = player.x, pyTop = player.y - (player.slideT>0? player.h*0.55 : player.h), pw = player.w, phh = (player.slideT>0? player.h*0.55 : player.h);
+  for(let i=obs.length-1;i>=0;i--){
+    const o = obs[i];
+    if(o.type==='plat') continue;
+    if(!aabb(px, pyTop, pw, phh, o.x, o.y, o.w, o.h)) continue;
+
+    if(state.smashT>0){
+      for(let k=0;k<10;k++){
+        parts.push({x:o.x+o.w/2, y:o.y+o.h/2, vx:rng(-220,220), vy:rng(-300,0), life:rng(0.25,0.5), color:'rgba(255,110,110,.9)'});
+      }
+      HUD.score += 2; obs.splice(i,1); state.cameraShake = Math.max(state.cameraShake, 7);
+      continue;
+    }
+    if(player.inv<=0){ damage(); break; }
+  }
+
+  for(const c of coins){
+    if(!c.got && circleRect(c.x,c.y,c.r, px, pyTop, pw, phh)){
+      c.got=true; HUD.coins++; HUD.score += 5; state.cameraShake = Math.max(state.cameraShake, 5);
+      if(audio) audio.sfx.coin();
+      for(let i=0;i<8;i++){
+        parts.push({x:c.x, y:c.y, vx:rng(-80,80), vy:rng(-160,-50), life:rng(0.25,0.45), color:`hsl(${c.hue},95%,60%)`});
+      }
+    }
+  }
+
+  for(const h of hearts){
+    if(!h.got && circleRect(h.x,h.y,h.r, px, pyTop, pw, phh)){
+      h.got = true;
+      if(player.lives < maxLives){ player.lives++; updateLivesHud(); }
+      HUD.score += 3; if(audio) audio.sfx.heart();
+      for(let i=0;i<10;i++){
+        parts.push({x:h.x, y:h.y, vx:rng(-70,70), vy:rng(-120,-40), life:rng(0.25,0.45), color:'rgba(255,120,140,.9)'});
+      }
+    }
+  }
+
+  for(const p of powerups){
+    if(p.got) continue;
+    if(p.type==='smash' && circleRect(p.x,p.y,p.r, px, pyTop, pw, phh)){
+      p.got = true; state.smashT = rng(4,6);
+      if(audio) audio.sfx.power();
+      document.getElementById('status').textContent = 'SMASH فعال شد! 💥';
+      setTimeout(()=>{ if(state.smashT<=0) document.getElementById('status').textContent=''; }, 1200);
+      for(let i=0;i<12;i++){
+        parts.push({x:p.x, y:p.y, vx:rng(-140,140), vy:rng(-200,-60), life:rng(0.25,0.5), color:'rgba(120,200,255,.9)'});
+      }
+    }
+  }
+
+  document.getElementById('score').textContent = Math.floor(HUD.score);
+  document.getElementById('coins').textContent = HUD.coins;
+}
+
+function damage(){
+  player.lives--; updateLivesHud();
+  state.cameraShake = 10; player.inv = 1.0;
+  if(audio) audio.sfx.hit();
+
+  if(player.lives <= 0){
+    state.over = true; state.running = false;
+    const s = Math.floor(HUD.score);
+    if(s > HUD.best){ HUD.best = s; localStorage.setItem('pro_runner_best', s); }
+    document.getElementById('best').textContent = HUD.best;
+    document.getElementById('status').textContent = 'باختی! برای شروع دوباره Space بزن';
+  } else {
+    document.getElementById('status').textContent = `یک جون از دست رفت! ❤️×${player.lives}`;
+    setTimeout(()=>{ if(!state.over) document.getElementById('status').textContent=''; }, 1200);
+  }
+}
+
+function aabb(x1,y1,w1,h1,x2,y2,w2,h2){
+  return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
+}
+function circleRect(cx,cy,cr, rx,ry,rw,rh){
+  const nx = clamp(cx, rx, rx+rw), ny = clamp(cy, ry, ry+rh);
+  const dx = cx-nx, dy=cy-ny;
+  return dx*dx + dy*dy <= cr*cr;
+}
+
+/* ======================= Draw ======================= */
+function draw(){
+  const W = BASE_W, H = BASE_H;
+
+  const hue = state.hue|0;
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, `hsl(${(hue+200)%360}, 55%, 22%)`);
+  grad.addColorStop(1, `hsl(${(hue+260)%360}, 60%, 12%)`);
+  ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+
+  const s = state.cameraShake;
+  const ox = s>0 ? (Math.random()*s - s/2) : 0;
+  const oy = s>0 ? (Math.random()*s - s/2) : 0;
+  state.cameraShake = Math.max(0, s - 0.9);
+
+  ctx.globalAlpha = .25;
+  for(let i=0;i<70;i++){
+    const x=(i*67)%W, y=(i*131)%260;
+    ctx.fillStyle = i%3? 'white': `hsl(${(hue+40*i)%360},100%,70%)`;
+    ctx.fillRect((x + Math.sin((performance.now()*0.001+i)*0.35)*3)|0, y, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = 'rgba(255,255,255,.10)';
+  roundRect( -20+ox, 440+oy, W+40, 14, 7, true);
+
+  for(const o of obs){
+    if(o.type==='plat'){
+      ctx.fillStyle = 'rgba(255,255,255,.16)';
+      roundRect(o.x+ox, o.y+oy, o.w, o.h, 8, true);
+      ctx.globalAlpha = .2; ctx.fillRect(o.x+ox, o.y-3+oy, o.w, 2); ctx.globalAlpha = 1;
+    } else if(o.type==='box'){
+      const grd = ctx.createLinearGradient(o.x, o.y, o.x, o.y+o.h);
+      grd.addColorStop(0, 'rgba(255,255,255,.25)'); grd.addColorStop(1, 'rgba(255,255,255,.1)');
+      ctx.fillStyle = grd; roundRect(o.x+ox, o.y+oy, o.w, o.h, 8, true);
+    } else {
+      ctx.fillStyle = 'rgba(255,107,107,.95)';
+      drawSpike(o.x+ox, o.y+o.h+oy, o.w, o.h);
+    }
+  }
+
+  for(const c of coins){
+    if(c.got) continue;
+    const g = ctx.createRadialGradient(c.x, c.y, 2, c.x, c.y, 10);
+    g.addColorStop(0, 'rgba(255,230,128,1)');
+    g.addColorStop(1, 'rgba(255,190,64,.2)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = .8; ctx.fillStyle = '#fff'; ctx.fillRect(c.x-1, c.y-6, 2, 4); ctx.globalAlpha = 1;
+  }
+
+  for(const h of hearts){
+    if(h.got) continue;
+    drawHeart(h.x, h.y, h.r+3);
+  }
+
+  for(const p of powerups){
+    if(p.got) continue;
+    const g = ctx.createRadialGradient(p.x, p.y, 3, p.x, p.y, 14);
+    g.addColorStop(0, 'rgba(160,220,255,1)');
+    g.addColorStop(1, 'rgba(120,180,255,.2)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha=.9; ctx.fillStyle='#eaf2ff'; ctx.fillRect(p.x-1, p.y-6, 2, 4); ctx.globalAlpha=1;
+  }
+
+  for(const p of parts){
+    ctx.globalAlpha = Math.max(0, p.life*2);
+    ctx.fillStyle = p.color || 'rgba(107,225,255,.8)';
+    ctx.fillRect(p.x, p.y, 3, 3);
+  }
+  ctx.globalAlpha = 1;
+
+  const ph = player.slideT>0? player.h*0.55 : player.h;
+  const py = player.y, px = player.x;
+  const cx = px + player.w/2, cy = py - ph/2;
+  const scale = state.smashT > 0 ? 1.6 : 1.0;
+
+  if(state.smashT>0){
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(player.w, ph)*0.7 + 8, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(120,200,255,0.6)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+
+  const grd2 = ctx.createLinearGradient(0, ph/2, 0, -ph/2);
+  grd2.addColorStop(0,'hsl(195, 95%, 65%)'); grd2.addColorStop(1,'hsl(34, 95%, 65%)');
+  ctx.fillStyle = grd2; roundRect(-player.w/2, -ph/2, player.w, ph, 10, true);
+
+  ctx.fillStyle = '#0b0f1a';
+  ctx.beginPath(); ctx.arc(-player.w*0.5 + player.w*0.7, -ph*0.5 + ph*0.3, 4, 0, Math.PI*2); ctx.fill();
+
+  if(player.dashT>0){
+    ctx.globalAlpha = 0.6; ctx.fillStyle = 'rgba(107,225,255,.35)';
+    roundRect(-player.w/2 - 18, -ph*0.35, 16, ph*0.7, 8, true); ctx.globalAlpha=1;
+  }
+  ctx.restore();
+
+  if(state.over){
+    overlay('باختی! 😅', 'Space برای شروع دوباره');
+  } else if(!state.running){
+    overlay('مکث ⏸', 'برای ادامه Space');
+  }
+}
+
+// ===== Utils draw =====
+function roundRect(x,y,w,h,r,fill){
+  if(w<0){x+=w;w*=-1} if(h<0){y+=h;h*=-1} if(r>Math.min(w,h)/2) r = Math.min(w,h)/2;
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+  if(fill) ctx.fill(); else ctx.stroke();
+}
+function drawSpike(x, y, w, h){
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w/2, y - h);
+  ctx.lineTo(x + w, y);
+  ctx.closePath();
+  ctx.fill();
+}
+function drawHeart(cx, cy, r){
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = 'rgba(255,120,140,.95)';
+  ctx.beginPath();
+  ctx.moveTo(0, -r*0.2);
+  ctx.bezierCurveTo(-r, -r*0.9, -r*1.2, 0, 0, r*1.1);
+  ctx.bezierCurveTo( r*1.2, 0,  r,   -r*0.9, 0, -ر*0.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+function overlay(title, sub){
+  const W = BASE_W, H = BASE_H;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.45)';
+  roundRect(W/2-220, H/2-80, 440, 160, 16, true);
+  ctx.textAlign='center'; ctx.fillStyle='#eaf2ff';
+  ctx.font='bold 28px ui-sans-serif'; ctx.fillText(title, W/2, H/2-16);
+  ctx.font='16px ui-sans-serif'; ctx.fillStyle='rgba(230,240,255,.9)'; ctx.fillText(sub, W/2, H/2+18);
+  ctx.restore();
+}
+
+/* ===== Restart ===== */
+function restart(){
+  HUD.score = 0; HUD.coins = 0;
+  obs.length = 0; coins.length = 0; parts.length = 0; hearts.length = 0; powerups.length = 0;
+  Object.assign(player, {x:160,y:440,w:44,h:64,vy:0,onGround:true,canDouble:true,slideT:0,dashT:0,dashCD:0,inv:0,trail:[], lives:5});
+  Object.assign(state, {running:true,over:false,t:0,speed:260,cameraShake:0,hue:210, smashT:0});
+  document.getElementById('score').textContent = 0;
+  document.getElementById('coins').textContent = 0;
+  document.getElementById('status').textContent = '';
+  updateLivesHud();
+}
+restart();
+
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) state.running=false; setTimeout(resizeCanvas, 0); });
+</script>
+</body>
+</html>
